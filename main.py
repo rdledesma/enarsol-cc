@@ -35,6 +35,10 @@ class radiationClass:
         self.dataFrame['Tita z'] = self.generate_tita_z()
         self.dataFrame['Altura solar'] = 90 - self.dataFrame['Tita z'] 
         self.dataFrame['Irr TOA wm2'] = self.generate_irradiancia_ext(self.dataFrame['Cos tita z'] , 1367.00, self.dataFrame['E0'])
+        self.ktr = 0.7 + 1.6391 * math.pow(10,-3) * math.pow(self.ALT, 0.5500)
+        self.dataFrame['Cos tita z grad'] = self.dataFrame['Cos tita z'].apply(math.degrees)
+        self.dataFrame['MA'] = self.generate_ma()
+        self.dataFrame['GHIcc'] = self.generate_GHIcc()
         # self.grupoDiario = self.day_mean()
         # self.grupoYear = self.year_mean()
         
@@ -81,6 +85,19 @@ class radiationClass:
         return self.dataFrame['Cos tita z'].apply(math.acos).apply(math.degrees)
     
     
+    def generate_ma(self):
+        
+        med = 0.15 *  np.power(93.885 - self.dataFrame['Cos tita z grad'], -1.253)
+        return 1 / (self.dataFrame['Cos tita z grad'] + med)
+        
+        #1 / (self.dataFrame['Cos tita z grad'] + 0.15* math.pow(93.885 - self.dataFrame['Cos tita z grad'], -1.253))
+    
+    
+    def generate_GHIcc(self):
+        med = np.power(self.dataFrame['MA'], 0.678)
+        return self.dataFrame['Irr TOA wm2'] * np.power(self.ktr, med)
+    
+    
     def export(self, name):
         self.dataFrame.to_csv(name, sep=",")
     
@@ -122,9 +139,10 @@ class radiationClass:
         hora = data['Hora reloj']
         GHI = data['Global']
         TOA = data['Irr TOA wm2']
-        
+        GHIcc = data['GHIcc']
         plt.plot(hora, GHI, label = "GHI")
         plt.plot(hora, TOA, label = "TOA")
+        plt.plot(hora, GHIcc, label = "GHIcc")
         plt.legend()
         plt.ylim([0, 2000])
         plt.title("dia "+ str(day))
@@ -252,12 +270,11 @@ abrapampa = pd.read_csv('abraPampa_2018.csv', sep=",")
 yuto = pd.read_csv('yuto_2018.csv', sep=",")
 
 
-salta_geo = radiationClass(salta, -24.78, -65.41,0)
-abrapampa_geo = radiationClass(abrapampa, -22.72, -65.69,0)
-yuto_geo = radiationClass(yuto, -23.38, -64.28,0)
+salta_geo = radiationClass(salta, -24.78, -65.41, 1152)
+abrapampa_geo = radiationClass(abrapampa, -22.72, -65.69,3487)
+yuto_geo = radiationClass(yuto, -23.38, -64.28, 340)
 
-abrapampa_geo.plot_day_of_year(36)
-#abrapampa_geo.plot_solar_map(15)
+salta_geo.plot_day_of_year(6)
 
 
 
