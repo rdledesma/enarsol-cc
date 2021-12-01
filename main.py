@@ -11,8 +11,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 class radiationClass:
-    def __init__(self, dataFrame, LAT, LONG, ALT):
+    def __init__(self, dataFrame, LAT, LONG, ALT, minCC, name):
         self.dataFrame = dataFrame
+        self.valoresDiarios = pd.DataFrame()
         self.LAT= LAT
         self.LONG = LONG
         self.ALT = ALT
@@ -39,8 +40,9 @@ class radiationClass:
         self.dataFrame['Cos tita z grad'] = self.dataFrame['Cos tita z'].apply(math.degrees)
         self.dataFrame['MA'] = self.generate_ma()
         self.dataFrame['GHIcc'] = self.generate_GHIcc()
-        # self.grupoDiario = self.day_mean()
-        # self.grupoYear = self.year_mean()
+        self.generate_valores_diarios(minCC)
+        self.totalDiasCC = self.valoresDiarios[self.valoresDiarios['CC'] == 1].sum()['CC']
+        
         
     def daily_angle(self, day):
         return np.divide(np.multiply(day-1, 2.0 * math.pi),365)
@@ -98,7 +100,40 @@ class radiationClass:
         return self.dataFrame['Irr TOA wm2'] * np.power(self.ktr, med)
     
     
+    def generate_valores_diarios(self, minCC):
+
+        GHI = self.dataFrame[["Dia juliano", "Global"]]
+        GHIcc = self.dataFrame[["Dia juliano", "GHIcc"]]
+        self.valoresDiarios['GHI'] = GHI.groupby(['Dia juliano']).sum()['Global']
+        self.valoresDiarios['GHIcc'] = GHIcc.groupby(['Dia juliano']).sum()['GHIcc']
+        self.valoresDiarios['GHI/GHIcc'] = self.valoresDiarios['GHI']  / self.valoresDiarios['GHIcc'] 
+        self.valoresDiarios['CC']  = np.where(((self.valoresDiarios['GHI/GHIcc']>= minCC) & (self.valoresDiarios['GHI/GHIcc']<=1.5)) , 1, 0)
+    
+    def gruped_by_time(self, time):
+        data = self.dataFrame[['Dia juliano','Irr TOA wm2','Global', 'GHIcc' ,'Tita z' ,'Fecha']]
+        data = data[data['Global'] > 50]
+        data = data[data['Tita z'] > 75]
+        data_group  = data.groupby(['Dia juliano',pd.Grouper(key = 'Fecha', freq=time)]).sum()
+        data_group = data_group.reset_index()
+        
+        r = pd.date_range(start='2018-01-01', end = '2019-01-01', freq=time)
+        r = r[:-1]
+        
+        group_full= data_group.set_index(data_group['Fecha'])
+        group_full.index = pd.DatetimeIndex(group_full.index)
+        group_full = group_full.reindex(r, fill_value=0)
+        group_full['Fecha'] = group_full.index
+        
+        group_full= group_full[['Fecha', 'Irr TOA wm2','Global', 'GHIcc']]
+        group_full.columns = ['Fecha', 'GHI TOA', 'GHI', 'GHIcc']
+        
+        
+        return group_full
+    
     def export(self, name):
+        
+        
+        
         self.dataFrame.to_csv(name, sep=",")
     
     def day_mean(self):
@@ -270,11 +305,19 @@ abrapampa = pd.read_csv('abraPampa_2018.csv', sep=",")
 yuto = pd.read_csv('yuto_2018.csv', sep=",")
 
 
-salta_geo = radiationClass(salta, -24.78, -65.41, 1152)
-abrapampa_geo = radiationClass(abrapampa, -22.72, -65.69,3487)
-yuto_geo = radiationClass(yuto, -23.38, -64.28, 340)
-
-salta_geo.plot_day_of_year(6)
+salta_geo = radiationClass(salta, -24.78, -65.41, 1152, minCC=0.8, name='salta')
+abrapampa_geo = radiationClass(abrapampa, -22.72, -65.69,3487, minCC=0.8, name='abrapampa')
+yuto_geo = radiationClass(yuto, -23.38, -64.28, 340, minCC=0.8, name='yuto')
 
 
 
+
+yuto_group = yuto_geo.gruped_by_time('10 min')
+yuto_group.to_csv('yuto_2018_10min.csv', index=False)
+
+salta_group = salta_geo.gruped_by_time('10 min')
+salta_group.to_csv('salta_2018_10min.csv', index=False)
+
+
+abrapampa_group = abrapampa_geo.gruped_by_time('10 min')
+abrapampa_group.to_csv('abrapampa_2018_10min.csv', index=False)
